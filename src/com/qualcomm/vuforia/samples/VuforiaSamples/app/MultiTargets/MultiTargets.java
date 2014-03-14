@@ -90,8 +90,13 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
     private DataSet dataSet = null;
     
     boolean mIsDroidDevice = false;
-    
-    
+
+    private VideoPlayerHelper mVideoPlayerHelper;
+    private String mMovieName;
+    private int mSeekPosition;
+    private boolean mWasPlaying;
+
+
     // Called when the activity first starts or the user navigates back to an
     // activity.
     @Override
@@ -110,11 +115,16 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
         // Load any sample specific textures:
         mTextures = new Vector<Texture>();
         loadTextures();
-        
+
         mGestureDetector = new GestureDetector(this, new GestureListener());
         
-        mIsDroidDevice = android.os.Build.MODEL.toLowerCase().startsWith(
-            "droid");
+        mIsDroidDevice = android.os.Build.MODEL.toLowerCase().startsWith("droid");
+
+        mVideoPlayerHelper = new VideoPlayerHelper();
+        mVideoPlayerHelper.init();
+        mVideoPlayerHelper.setActivity(this);
+
+        mMovieName = "VideoPlayback/chromakey.mp4";
         
     }
     
@@ -194,6 +204,11 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
             mGlView.setVisibility(View.VISIBLE);
             mGlView.onResume();
         }
+
+        if (mRenderer != null)
+        {
+            mRenderer.requestLoad(mMovieName, mSeekPosition, mWasPlaying);
+        }
         
     }
     
@@ -220,6 +235,9 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
             mGlView.setVisibility(View.INVISIBLE);
             mGlView.onPause();
         }
+
+        mSeekPosition = mVideoPlayerHelper.getCurrentPosition();
+        mWasPlaying = mVideoPlayerHelper.getStatus() == VideoPlayerHelper.MEDIA_STATE.PLAYING ? true : false;
         
         // Turn off the flash
         if (mFlashOptionView != null && mFlash)
@@ -242,6 +260,16 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
             Log.e(LOGTAG, e.getString());
         }
     }
+
+    public void pauseAll(int except)
+    {
+        // And pause all the playing videos:
+            // We can make one exception to the pause all calls:
+        if (-1 != except)
+        {
+            mVideoPlayerHelper.pause();
+        }
+    }
     
     
     // The final call you receive before your activity is destroyed.
@@ -250,6 +278,10 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
     {
         Log.d(LOGTAG, "onDestroy");
         super.onDestroy();
+
+        if (mVideoPlayerHelper != null)
+            mVideoPlayerHelper.deinit();
+        mVideoPlayerHelper = null;
         
         try
         {
@@ -276,8 +308,13 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
         
         return mGestureDetector.onTouchEvent(event);
     }
-    
-    
+
+    @Override
+    public void onBackPressed() {
+        pauseAll(-1);
+        super.onBackPressed();
+    }
+
     private void startLoadingAnimation()
     {
         LayoutInflater inflater = LayoutInflater.from(this);
@@ -312,9 +349,16 @@ public class MultiTargets extends Activity implements SampleApplicationControl,
         mGlView = new SampleApplicationGLView(this);
         mGlView.init(translucent, depthSize, stencilSize);
         
-        mRenderer = new MultiTargetRenderer(vuforiaAppSession);
+        mRenderer = new MultiTargetRenderer(this, vuforiaAppSession);
         mRenderer.setTextures(mTextures);
+        mRenderer.setVideoPlayerHelper( mVideoPlayerHelper);
+        mRenderer.requestLoad(mMovieName, 0, false);
+
         mGlView.setRenderer(mRenderer);
+
+        float[] temp = { 0f, 0f };
+        mRenderer.targetPositiveDimensions.setData(temp);
+        mRenderer.videoPlaybackTextureID[0] = -1;
         
     }
     
